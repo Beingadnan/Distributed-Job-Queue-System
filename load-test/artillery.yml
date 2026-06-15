@@ -1,0 +1,73 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Warm-up phase: 5 req/s for 10 seconds
+    - duration: 10
+      arrivalRate: 5
+      name: "Warm-up"
+    # Ramp-up phase: 5 → 50 req/s over 30 seconds
+    - duration: 30
+      arrivalRate: 5
+      rampTo: 50
+      name: "Ramp-up"
+    # Sustained load: 50 req/s for 20 seconds
+    - duration: 20
+      arrivalRate: 50
+      name: "Peak load"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  # High-priority job — 20% of traffic
+  - name: "Enqueue high-priority email job"
+    weight: 20
+    flow:
+      - post:
+          url: "/jobs"
+          json:
+            name: "send-email"
+            priority: "high"
+            data:
+              to: "user@example.com"
+              subject: "Load test email"
+          capture:
+            - json: "$.job.id"
+              as: "jobId"
+      - get:
+          url: "/jobs/{{ jobId }}"
+
+  # Default-priority job — 50% of traffic
+  - name: "Enqueue default image resize job"
+    weight: 50
+    flow:
+      - post:
+          url: "/jobs"
+          json:
+            name: "resize-image"
+            priority: "default"
+            data:
+              imageUrl: "https://example.com/photo.jpg"
+              width: 800
+              height: 600
+
+  # Low-priority job — 30% of traffic
+  - name: "Enqueue low-priority report job"
+    weight: 30
+    flow:
+      - post:
+          url: "/jobs"
+          json:
+            name: "generate-report"
+            priority: "low"
+            data:
+              reportType: "monthly-summary"
+              userId: "user-123"
+
+  # Queue stats check — woven in at low weight
+  - name: "Check queue stats"
+    weight: 5
+    flow:
+      - get:
+          url: "/queues/stats"
